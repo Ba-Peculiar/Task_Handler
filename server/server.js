@@ -247,55 +247,64 @@ app.get('/api/tasks', authenticateToken, (req, res) => {
     const userId = req.user.id; // Get user ID from the authenticated token payload
     const taskId = req.params.id;
     const { title, description, completed } = req.body; // Allow updating title, description, and completed status
-  
-    // Basic validation (at least one field to update)
-    if (title === undefined && description === undefined && completed === undefined) {
-        return res.status(400).json({ message: 'No update fields provided' });
-    }
-  
-    // Build the SQL query dynamically based on provided fields
-    let updateFields = [];
-    let params = [];
-  
-    if (title !== undefined) {
-        updateFields.push('title = ?');
-        params.push(title);
-    }
-    if (description !== undefined) {
-        updateFields.push('description = ?');
-        params.push(description);
-    }
-    if (completed !== undefined) {
-        // Ensure completed is a boolean (0 or 1 in SQLite)
-        updateFields.push('completed = ?');
-        params.push(completed ? 1 : 0);
-    }
-  
-    if (updateFields.length === 0) {
-         return res.status(400).json({ message: 'No valid update fields provided' });
-    }
-  
-    const sql = `UPDATE tasks SET ${updateFields.join(', ')} WHERE id = ? AND user_id = ?`;
-    params.push(taskId, userId);
-  
-    db.run(sql, params, function(err) { // Use function() to access 'this' for changes
+
+    // First check if the task exists and belongs to the user
+    db.get('SELECT * FROM tasks WHERE id = ? AND user_id = ?', [taskId, userId], (err, task) => {
       if (err) {
-        console.error('Database error updating task:', err.message);
-        res.status(500).json({ message: 'Error updating task' });
-        return;
+        console.error('Database error checking task:', err.message);
+        return res.status(500).json({ message: 'Error updating task' });
       }
-      if (this.changes === 0) {
-        // Check if the task existed and belonged to the user
-        db.get('SELECT 1 FROM tasks WHERE id = ? AND user_id = ?', [taskId, userId], (checkErr, row) => {
-            if (checkErr || !row) {
-                 return res.status(404).json({ message: 'Task not found or does not belong to user' });
-            }
-             // Task found but no changes made (e.g., sending same data)
-             res.json({ message: 'Task updated successfully (no changes made)' });
+
+      if (!task) {
+        return res.status(404).json({ message: 'Task not found or does not belong to user' });
+      }
+
+      // Build the update query based on provided fields
+      const updates = [];
+      const params = [];
+      
+      if (title !== undefined) {
+        updates.push('title = ?');
+        params.push(title);
+      }
+      if (description !== undefined) {
+        updates.push('description = ?');
+        params.push(description);
+      }
+      if (completed !== undefined) {
+        updates.push('completed = ?');
+        params.push(completed ? 1 : 0);
+      }
+
+      if (updates.length === 0) {
+        return res.status(400).json({ message: 'No valid fields to update' });
+      }
+
+      // Add taskId and userId to params
+      params.push(taskId, userId);
+
+      // Update the task
+      const sql = `UPDATE tasks SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`;
+      
+      db.run(sql, params, function(err) {
+        if (err) {
+          console.error('Database error updating task:', err.message);
+          return res.status(500).json({ message: 'Error updating task' });
+        }
+
+        // Fetch and return the updated task
+        db.get('SELECT * FROM tasks WHERE id = ?', [taskId], (selectErr, updatedTask) => {
+          if (selectErr) {
+            console.error('Error fetching updated task:', selectErr.message);
+            return res.status(500).json({ message: 'Error fetching updated task' });
+          }
+          
+          res.json({
+            message: 'Task updated successfully',
+            data: updatedTask
+          });
         });
-      } else {
-        res.json({ message: 'Task updated successfully' });
-      }
+      });
     });
   });
   
