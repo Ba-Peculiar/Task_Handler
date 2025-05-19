@@ -1,4 +1,4 @@
-'use client'; // This is a client component
+'use client'; 
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
@@ -41,21 +41,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     router.push('/login');
   };
 
-  // Optional: Basic check if token is expired (more robust check needed for production)
-  // useEffect(() => {
-  //   if (token) {
-  //     try {
-  //       const payload = JSON.parse(atob(token.split('.')[1]));
-  //       if (payload.exp * 1000 < Date.now()) {
-  //         console.log("Token expired, logging out.");
-  //         logout();
-  //       }
-  //     } catch (e) {
-  //       console.error("Error decoding token:", e);
-  //       logout(); // Log out if token is invalid
-  //     }
-  //   }
-  // }, [token]); // Re-run check if token changes
 
   return (
     <AuthContext.Provider value={{ token, login, logout }}>
