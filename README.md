@@ -13,8 +13,8 @@ A full-stack task management application built with Next.js, TypeScript, and Tai
 ## Tech Stack
 
 - Frontend: Next.js, TypeScript, Tailwind CSS
-- Backend: Node.js, Express
-- Database: PostgreSQL
+- Backend: Node.js
+- Database: SQLlite3
 - Authentication: JWT
 
 ## Getting Started
@@ -22,20 +22,20 @@ A full-stack task management application built with Next.js, TypeScript, and Tai
 ### Prerequisites
 
 - Node.js (v14 or higher)
-- npm or yarn
-- PostgreSQL
+- npm 
 
 ### Installation
 
 1. Clone the repository:
 ```bash
-git clone <your-repository-url>
+git clone <repository-url>
 cd task-handler
 ```
 
 2. Install dependencies:
 ```bash
 # Install backend dependencies
+cd server
 npm install
 
 # Install frontend dependencies
@@ -44,13 +44,13 @@ npm install
 ```
 
 3. Set up environment variables:
-   - Create a `.env` file in the root directory
-   - Create a `.env` file in the client directory
+   - Create a `.env` file in the server directory
 
 4. Start the development servers:
 ```bash
-# Start backend server (from root directory)
-npm run dev
+# Start backend server (from server directory)
+cd server
+node server.js
 
 # Start frontend server (from client directory)
 cd client
@@ -60,26 +60,6 @@ npm run dev
 The application will be available at:
 - Frontend: http://localhost:3000
 - Backend: http://localhost:5000
-
-## Project Structure
-
-```
-task-handler/
-├── client/             # Frontend Next.js application
-│   ├── src/
-│   │   ├── app/       # Next.js app directory
-│   │   ├── components/# React components
-│   │   ├── context/   # React context providers
-│   │   └── utils/     # Utility functions
-│   └── public/        # Static files
-└── server/            # Backend Express application
-    ├── src/
-    │   ├── controllers/# Route controllers
-    │   ├── middleware/ # Custom middleware
-    │   ├── models/    # Database models
-    │   └── routes/    # API routes
-    └── config/        # Configuration files
-```
 
 ## Contributing
 
