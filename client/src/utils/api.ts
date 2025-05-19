@@ -1,6 +1,4 @@
-import { useAuth } from "@/context/AuthContext";
-
-const API_BASE_URL = 'http://localhost:5000/api'; // Your backend URL
+const API_BASE_URL = 'http://localhost:5000/api'; 
 
 // Generic function to make API calls
 export const apiRequest = async (
