@@ -13,7 +13,7 @@ interface Task {
   user_id: number;
   title: string;
   description: string | null;
-  completed: number; // SQLite stores booleans as 0 or 1
+  completed: number; 
   created_at: string;
 }
 
