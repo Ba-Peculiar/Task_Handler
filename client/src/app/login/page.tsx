@@ -1,8 +1,8 @@
-'use client'; // This is a client component
+'use client'; 
 
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { apiPost } from '@/utils/api'; // Use apiPost from your utility
+import { apiPost } from '@/utils/api'; 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Loader2, LogIn, UserPlus } from 'lucide-react';
@@ -12,18 +12,18 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth(); // Get login function from context
+  const { login } = useAuth(); 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null); // Clear previous errors
+    setError(null); 
     setLoading(true);
 
     try {
       const response = await apiPost('/login', { username, password }, null, false);
 
       if (response && response.token) {
-        login(response.token); // Use the login function from AuthContext
+        login(response.token); 
       } else {
         setError('Login failed. Please check your credentials.');
       }
