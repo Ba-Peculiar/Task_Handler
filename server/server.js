@@ -9,13 +9,13 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 const app = express();
-const port = process.env.PORT || 5000; // Use port from environment variable or default to 5000
+const port = process.env.PORT || 5000; 
 const jwtSecret = process.env.JWT_SECRET;
 const dbUrl = process.env.DATABASE_URL;
 
 // Middleware
-app.use(cors()); // Allows frontend to make requests
-app.use(express.json()); // Parses incoming JSON requests
+app.use(cors()); 
+app.use(express.json()); 
 
 // --- Database Setup ---
 const db = new sqlite3.Database(dbUrl, (err) => {
@@ -61,18 +61,18 @@ const db = new sqlite3.Database(dbUrl, (err) => {
 // --- Middleware to protect routes (JWT Authentication) ---
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Get token from 'Bearer TOKEN' header
+  const token = authHeader && authHeader.split(' ')[1]; 
 
   if (token == null) {
-    return res.sendStatus(401); // If no token, return unauthorized
+    return res.sendStatus(401); 
   }
 
   jwt.verify(token, jwtSecret, (err, user) => {
     if (err) {
-      return res.sendStatus(403); // If token is invalid, return forbidden
+      return res.sendStatus(403); 
     }
-    req.user = user; // Add user payload to request
-    next(); // Proceed to the next middleware or route handler
+    req.user = user;
+    next(); 
   });
 };
 
@@ -94,7 +94,7 @@ app.post('/api/register', async (req, res) => {
 
   try {
     // Hash the password
-    const hashedPassword = await bcrypt.hash(password, 10); // 10 is the salt rounds
+    const hashedPassword = await bcrypt.hash(password, 10); 
 
     // Insert the new user into the database
     db.run('INSERT INTO users (username, password) VALUES (?, ?)', [username, hashedPassword], function(err) {
@@ -144,7 +144,7 @@ app.post('/api/login', (req, res) => {
       }
 
       // Passwords match, generate a JWT token
-      const accessToken = jwt.sign({ id: user.id, username: user.username }, jwtSecret, { expiresIn: '1h' }); // Token expires in 1 hour
+      const accessToken = jwt.sign({ id: user.id, username: user.username }, jwtSecret, { expiresIn: '1h' }); 
 
       res.json({ message: 'Login successful', token: accessToken });
 
@@ -158,8 +158,8 @@ app.post('/api/login', (req, res) => {
 
 // GET all tasks for the authenticated user (with optional filtering)
 app.get('/api/tasks', authenticateToken, (req, res) => {
-    const userId = req.user.id; // Get user ID from the authenticated token payload
-    const { status } = req.query; // Get optional status filter from query parameters
+    const userId = req.user.id; 
+    const { status } = req.query; 
   
     let sql = 'SELECT * FROM tasks WHERE user_id = ?';
     const params = [userId];
@@ -169,9 +169,9 @@ app.get('/api/tasks', authenticateToken, (req, res) => {
     } else if (status === 'pending') {
       sql += ' AND completed = 0';
     }
-    // No filter applied if status is 'all' or not provided
+    
   
-    sql += ' ORDER BY created_at DESC'; // Optional: order tasks by creation date
+    sql += ' ORDER BY created_at DESC'; 
   
     db.all(sql, params, (err, rows) => {
       if (err) {
@@ -188,7 +188,7 @@ app.get('/api/tasks', authenticateToken, (req, res) => {
   
   // GET a specific task for the authenticated user
   app.get('/api/tasks/:id', authenticateToken, (req, res) => {
-    const userId = req.user.id; // Get user ID from the authenticated token payload
+    const userId = req.user.id; 
     const taskId = req.params.id;
   
     db.get('SELECT * FROM tasks WHERE id = ? AND user_id = ?', [taskId, userId], (err, row) => {
@@ -209,7 +209,7 @@ app.get('/api/tasks', authenticateToken, (req, res) => {
   
   // POST a new task for the authenticated user
   app.post('/api/tasks', authenticateToken, (req, res) => {
-    const userId = req.user.id; // Get user ID from the authenticated token payload
+    const userId = req.user.id; 
     const { title, description } = req.body;
   
     if (!title) {
@@ -219,7 +219,7 @@ app.get('/api/tasks', authenticateToken, (req, res) => {
     // Insert the new task into the database
     db.run('INSERT INTO tasks (user_id, title, description) VALUES (?, ?, ?)',
       [userId, title, description],
-      function(err) { // Use function() to access 'this' for lastID
+      function(err) { 
         if (err) {
           console.error('Database error creating task:', err.message);
           res.status(500).json({ message: 'Error creating task' });
@@ -229,7 +229,6 @@ app.get('/api/tasks', authenticateToken, (req, res) => {
         db.get('SELECT * FROM tasks WHERE id = ?', [this.lastID], (selectErr, newTask) => {
            if (selectErr) {
               console.error('Error fetching newly created task:', selectErr.message);
-              // Still return success, but without the full task data
               res.status(201).json({ message: 'Task created successfully', taskId: this.lastID });
            } else {
               res.status(201).json({
@@ -244,9 +243,9 @@ app.get('/api/tasks', authenticateToken, (req, res) => {
   
   // PUT to update a task for the authenticated user
   app.put('/api/tasks/:id', authenticateToken, (req, res) => {
-    const userId = req.user.id; // Get user ID from the authenticated token payload
+    const userId = req.user.id; 
     const taskId = req.params.id;
-    const { title, description, completed } = req.body; // Allow updating title, description, and completed status
+    const { title, description, completed } = req.body; 
 
     // First check if the task exists and belongs to the user
     db.get('SELECT * FROM tasks WHERE id = ? AND user_id = ?', [taskId, userId], (err, task) => {
@@ -280,10 +279,10 @@ app.get('/api/tasks', authenticateToken, (req, res) => {
         return res.status(400).json({ message: 'No valid fields to update' });
       }
 
-      // Add taskId and userId to params
+      
       params.push(taskId, userId);
 
-      // Update the task
+      
       const sql = `UPDATE tasks SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`;
       
       db.run(sql, params, function(err) {
@@ -310,13 +309,13 @@ app.get('/api/tasks', authenticateToken, (req, res) => {
   
   // DELETE a task for the authenticated user
   app.delete('/api/tasks/:id', authenticateToken, (req, res) => {
-    const userId = req.user.id; // Get user ID from the authenticated token payload
+    const userId = req.user.id; 
     const taskId = req.params.id;
   
     const sql = 'DELETE FROM tasks WHERE id = ? AND user_id = ?';
     const params = [taskId, userId];
   
-    db.run(sql, params, function(err) { // Use function() to access 'this' for changes
+    db.run(sql, params, function(err) { 
       if (err) {
         console.error('Database error deleting task:', err.message);
         res.status(500).json({ message: 'Error deleting task' });
