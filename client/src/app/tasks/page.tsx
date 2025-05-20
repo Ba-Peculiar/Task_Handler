@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { 
   Check, X, Plus, Trash, LogOut, 
   Loader2, AlertCircle, CheckCircle, 
-  ChevronDown, Calendar
+  ChevronDown, Calendar, WifiOff
 } from 'lucide-react';
 
 interface Task {
@@ -13,13 +13,10 @@ interface Task {
   user_id: number;
   title: string;
   description: string | null;
-  completed: number; 
+  completed: number;
   created_at: string;
-}
-
-interface ApiResponse {
-  message: string;
-  data: Task | Task[];
+  synced?: boolean;
+  last_modified?: number;
 }
 
 export default function TasksPage() {
@@ -33,58 +30,77 @@ export default function TasksPage() {
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [expandAddTask, setExpandAddTask] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
 
-  // Check authentication on mount
+  // Check authentication and load tasks on mount
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      router.push('/login');
-    }
-  }, [router]);
-
-  // Handle logout
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    router.push('/login');
-  };
-
-  // Fetch tasks on component mount and when filter changes
-  useEffect(() => {
-    const fetchTasks = async () => {
-      const token = localStorage.getItem('token');
+    if (typeof window === 'undefined') return;
+    let localStorageService: any;
+    let syncService: any;
+    const init = async () => {
+      const { localStorageService: ls } = await import('@/utils/localStorage');
+      const { syncService: ss } = await import('@/utils/syncService');
+      localStorageService = ls;
+      syncService = ss;
+      const token = await localStorageService.getAuthToken();
       if (!token) {
         router.push('/login');
         return;
       }
-
-      setLoading(true);
-      try {
-        const response = await fetch(`http://localhost:5000/api/tasks${filter !== 'all' ? `?status=${filter}` : ''}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
+      // Load tasks from local storage
+      const userId = 1;
+      const localTasks = await localStorageService.getTasks(userId);
+      setTasks(localTasks);
+      // If online, sync with server
+      if (navigator.onLine) {
+        try {
+          const response = await fetch(`http://localhost:5000/api/tasks${filter !== 'all' ? `?status=${filter}` : ''}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          if (response.ok) {
+            const data = await response.json();
+            if (data.data && Array.isArray(data.data)) {
+              for (const task of data.data) {
+                await localStorageService.updateTask({
+                  ...task,
+                  synced: true,
+                  last_modified: Date.now()
+                });
+              }
+              setTasks(data.data);
+            }
           }
-        });
-        if (response.status === 401) {
-          localStorage.removeItem('token');
-          router.push('/login');
-          return;
+        } catch (err) {
+          // Continue with local data if sync fails
         }
-        if (!response.ok) throw new Error('Failed to fetch tasks');
-        const data: ApiResponse = await response.json();
-        if (data.data && Array.isArray(data.data)) {
-          setTasks(data.data);
-        } else {
-          setError('Invalid response format from server');
-        }
-      } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : 'An error occurred');
-      } finally {
-        setLoading(false);
       }
     };
+    init();
+  }, [router, filter]);
 
-    fetchTasks();
-  }, [filter, router]);
+  // Handle online/offline status
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setIsOnline(navigator.onLine);
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Handle logout
+  const handleLogout = async () => {
+    if (typeof window === 'undefined') return;
+    const { localStorageService } = await import('@/utils/localStorage');
+    await localStorageService.clearAuthToken();
+    router.push('/login');
+  };
 
   // Function to add a task
   const handleAddTask = async () => {
@@ -92,30 +108,29 @@ export default function TasksPage() {
       setError('Task title cannot be empty.');
       return;
     }
-
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:5000/api/tasks', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({
-          title: newTaskTitle,
-          description: newTaskDescription
-        })
-      });
-
-      if (!response.ok) throw new Error('Failed to add task');
-      const data = await response.json();
-      
-      setTasks([data.data, ...tasks]);
+      if (typeof window === 'undefined') return;
+      const { localStorageService } = await import('@/utils/localStorage');
+      const { syncService } = await import('@/utils/syncService');
+      const userId = 1;
+      const newTask = {
+        user_id: userId,
+        title: newTaskTitle,
+        description: newTaskDescription,
+        completed: 0,
+        created_at: new Date().toISOString()
+      };
+      const id = await localStorageService.addTask(newTask);
+      setTasks([{ ...newTask, id }, ...tasks]);
       setNewTaskTitle('');
       setNewTaskDescription('');
       setSuccessMessage('Task added successfully!');
       setShowSuccessMessage(true);
       setExpandAddTask(false);
+      if (navigator.onLine) {
+        await syncService.sync();
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -127,26 +142,21 @@ export default function TasksPage() {
   const handleToggleComplete = async (task: Task) => {
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:5000/api/tasks/${task.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({
-          completed: !task.completed
-        })
-      });
-
-      if (!response.ok) throw new Error('Failed to update task');
-      const data = await response.json();
-      
-      if (data.data) {
-        setTasks(tasks.map(t => t.id === task.id ? data.data : t));
-        setSuccessMessage(`Task marked as ${!task.completed ? 'completed' : 'pending'}!`);
-        setShowSuccessMessage(true);
-      } else {
-        throw new Error('Invalid response format from server');
+      if (typeof window === 'undefined') return;
+      const { localStorageService } = await import('@/utils/localStorage');
+      const { syncService } = await import('@/utils/syncService');
+      const updatedTask = {
+        ...task,
+        completed: task.completed === 1 ? 0 : 1,
+        synced: false,
+        last_modified: Date.now()
+      };
+      await localStorageService.updateTask(updatedTask);
+      setTasks(tasks.map(t => t.id === task.id ? updatedTask : t));
+      setSuccessMessage(`Task marked as ${updatedTask.completed === 1 ? 'completed' : 'pending'}!`);
+      setShowSuccessMessage(true);
+      if (navigator.onLine) {
+        await syncService.sync();
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -159,18 +169,16 @@ export default function TasksPage() {
   const handleDeleteTask = async (taskId: number) => {
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:5000/api/tasks/${taskId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      if (!response.ok) throw new Error('Failed to delete task');
-      
+      if (typeof window === 'undefined') return;
+      const { localStorageService } = await import('@/utils/localStorage');
+      const { syncService } = await import('@/utils/syncService');
+      await localStorageService.deleteTask(taskId);
       setTasks(tasks.filter(t => t.id !== taskId));
       setSuccessMessage('Task deleted successfully!');
       setShowSuccessMessage(true);
+      if (navigator.onLine) {
+        await syncService.sync();
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -208,13 +216,21 @@ export default function TasksPage() {
         {/* Header Section */}
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-purple-600">My Tasks</h1>
-          <button
-            onClick={handleLogout}
-            className="px-4 py-2 flex items-center gap-2 bg-white text-red-500 font-medium rounded-full shadow-sm hover:shadow-md transition-all duration-300 hover:scale-105"
-          >
-            <LogOut size={18} />
-            <span className="hidden sm:inline">Logout</span>
-          </button>
+          <div className="flex items-center gap-4">
+            {!isOnline && (
+              <div className="flex items-center gap-2 text-amber-600">
+                <WifiOff size={18} />
+                <span className="text-sm">Offline Mode</span>
+              </div>
+            )}
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 flex items-center gap-2 bg-white text-red-500 font-medium rounded-full shadow-sm hover:shadow-md transition-all duration-300 hover:scale-105"
+            >
+              <LogOut size={18} />
+              <span className="hidden sm:inline">Logout</span>
+            </button>
+          </div>
         </div>
 
         {/* Success Message */}
